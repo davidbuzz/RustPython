@@ -104,7 +104,6 @@ errno = "0.3"
 widestring = { workspace = true }
 
 [target.'cfg(all(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"), not(any(target_env = "musl", target_env = "sgx"))))'.dependencies]
-libffi = { workspace = true, features = ["system"] }
 libloading = "0.9"
 
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))'.dependencies]
@@ -153,3 +152,13 @@ itertools = { workspace = true }
 
 [lints]
 workspace = true
+
+# libffi for the same targets as libloading above: the system's where there is one, and on
+# x86_64-pc-windows-gnu, where MinGW ships none, the crate's own copy (libffi-sys without `system`
+# configures and makes it for the cross host).
+[target.'cfg(all(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"), not(any(target_env = "musl", target_env = "sgx")), not(all(windows, target_env = "gnu"))))'.dependencies]
+libffi = { workspace = true, features = ["system"] }
+
+[target.'cfg(all(windows, target_env = "gnu"))'.dependencies]
+libffi = { workspace = true }
+
