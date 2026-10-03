@@ -8,7 +8,7 @@ pub use decl::time;
 
 pub(crate) use decl::module_def;
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(not(windows))]
 #[cfg(not(target_arch = "wasm32"))]
 unsafe extern "C" {
     #[cfg(not(target_os = "freebsd"))]
@@ -41,7 +41,7 @@ mod decl {
         naive::{NaiveDate, NaiveDateTime, NaiveTime},
     };
     use core::time::Duration;
-    #[cfg(target_env = "msvc")]
+    #[cfg(windows)]
     #[cfg(not(target_arch = "wasm32"))]
     use windows_sys::Win32::System::Time::{GetTimeZoneInformation, TIME_ZONE_INFORMATION};
 
@@ -215,7 +215,7 @@ mod decl {
         Ok(get_perf_time(vm)?.as_nanos())
     }
 
-    #[cfg(target_env = "msvc")]
+    #[cfg(windows)]
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn get_tz_info() -> TIME_ZONE_INFORMATION {
         let mut info: TIME_ZONE_INFORMATION = unsafe { core::mem::zeroed() };
@@ -228,7 +228,7 @@ mod decl {
     //     unsafe { super::_tzset() };
     // }
 
-    #[cfg(not(target_env = "msvc"))]
+    #[cfg(not(windows))]
     #[cfg(not(target_arch = "wasm32"))]
     #[pyattr]
     fn altzone(_vm: &VirtualMachine) -> core::ffi::c_long {
@@ -236,7 +236,7 @@ mod decl {
         unsafe { super::c_timezone - 3600 }
     }
 
-    #[cfg(target_env = "msvc")]
+    #[cfg(windows)]
     #[cfg(not(target_arch = "wasm32"))]
     #[pyattr]
     fn altzone(_vm: &VirtualMachine) -> i32 {
@@ -245,14 +245,14 @@ mod decl {
         (info.Bias + info.StandardBias) * 60 - 3600
     }
 
-    #[cfg(not(target_env = "msvc"))]
+    #[cfg(not(windows))]
     #[cfg(not(target_arch = "wasm32"))]
     #[pyattr]
     fn timezone(_vm: &VirtualMachine) -> core::ffi::c_long {
         unsafe { super::c_timezone }
     }
 
-    #[cfg(target_env = "msvc")]
+    #[cfg(windows)]
     #[cfg(not(target_arch = "wasm32"))]
     #[pyattr]
     fn timezone(_vm: &VirtualMachine) -> i32 {
@@ -262,14 +262,14 @@ mod decl {
     }
 
     #[cfg(not(target_os = "freebsd"))]
-    #[cfg(not(target_env = "msvc"))]
+    #[cfg(not(windows))]
     #[cfg(not(target_arch = "wasm32"))]
     #[pyattr]
     fn daylight(_vm: &VirtualMachine) -> core::ffi::c_int {
         unsafe { super::c_daylight }
     }
 
-    #[cfg(target_env = "msvc")]
+    #[cfg(windows)]
     #[cfg(not(target_arch = "wasm32"))]
     #[pyattr]
     fn daylight(_vm: &VirtualMachine) -> i32 {
@@ -278,7 +278,7 @@ mod decl {
         (info.StandardBias != info.DaylightBias) as i32
     }
 
-    #[cfg(not(target_env = "msvc"))]
+    #[cfg(not(windows))]
     #[cfg(not(target_arch = "wasm32"))]
     #[pyattr]
     fn tzname(vm: &VirtualMachine) -> crate::builtins::PyTupleRef {
@@ -292,7 +292,7 @@ mod decl {
         unsafe { (to_str(super::c_tzname[0]), to_str(super::c_tzname[1])) }.into_pytuple(vm)
     }
 
-    #[cfg(target_env = "msvc")]
+    #[cfg(windows)]
     #[cfg(not(target_arch = "wasm32"))]
     #[pyattr]
     fn tzname(vm: &VirtualMachine) -> crate::builtins::PyTupleRef {
@@ -1051,7 +1051,7 @@ mod decl {
         vm: &VirtualMachine,
         module: &Py<crate::builtins::PyModule>,
     ) -> PyResult<()> {
-        #[cfg(not(target_env = "msvc"))]
+        #[cfg(not(windows))]
         #[cfg(not(target_arch = "wasm32"))]
         unsafe {
             super::c_tzset()
