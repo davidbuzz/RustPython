@@ -33,8 +33,13 @@ enum CompilationSourceKind {
     File { base: PathBuf, rel_path: PathBuf },
     /// Direct Raw source code
     SourceCode(String),
-    /// Source is a directory
-    Dir { base: PathBuf, rel_path: PathBuf },
+    /// Source is a directory, less the packages named in `exclude` (dotted, from the directory:
+    /// `test`, `idlelib.idle_test`)
+    Dir {
+        base: PathBuf,
+        rel_path: PathBuf,
+        exclude: Vec<String>,
+    },
 }
 
 struct CompiledModule {
@@ -80,9 +85,18 @@ impl CompilationSource {
         compiler: &dyn Compiler,
     ) -> Result<HashMap<String, CompiledModule>, Diagnostic> {
         match &self.kind {
-            CompilationSourceKind::Dir { base, rel_path } => {
-                self.compile_dir(base, &base.join(rel_path), String::new(), mode, compiler)
-            }
+            CompilationSourceKind::Dir {
+                base,
+                rel_path,
+                exclude,
+            } => self.compile_dir(
+                base,
+                &base.join(rel_path),
+                String::new(),
+                exclude,
+                mode,
+                compiler,
+            ),
             _ => Ok(hashmap! {
                 module_name.clone() => CompiledModule {
                     code: self.compile_single(mode, module_name, compiler)?,
@@ -127,6 +141,7 @@ impl CompilationSource {
         base: &Path,
         path: &Path,
         parent: String,
+        exclude: &[String],
         mode: Mode,
         compiler: &dyn Compiler,
     ) -> Result<HashMap<String, CompiledModule>, Diagnostic> {
@@ -152,17 +167,15 @@ impl CompilationSource {
                 Diagnostic::spans_error(self.span, format!("Invalid UTF-8 in file name {path:?}"))
             })?;
             if path.is_dir() {
-                code_map.extend(self.compile_dir(
-                    base,
-                    &path,
-                    if parent.is_empty() {
-                        file_name.to_string()
-                    } else {
-                        format!("{parent}.{file_name}")
-                    },
-                    mode,
-                    compiler,
-                )?);
+                let package = if parent.is_empty() {
+                    file_name.to_string()
+                } else {
+                    format!("{parent}.{file_name}")
+                };
+                if exclude.contains(&package) {
+                    continue;
+                }
+                code_map.extend(self.compile_dir(base, &path, package, exclude, mode, compiler)?);
             } else if file_name.ends_with(".py") {
                 let stem = path.file_stem().unwrap().to_str().unwrap();
                 let is_init = stem == "__init__";
@@ -230,6 +243,7 @@ impl PyCompileArgs {
         let mut mode = None;
         let mut source: Option<CompilationSource> = None;
         let mut crate_name = None;
+        let mut exclude: Option<(Vec<String>, Span)> = None;
 
         fn assert_source_empty(source: &Option<CompilationSource>) -> Result<(), syn::Error> {
             if let Some(source) = source {
@@ -288,9 +302,23 @@ impl PyCompileArgs {
                 assert_source_empty(&source)?;
                 let (base, rel_path) = str_path()?;
                 source = Some(CompilationSource {
-                    kind: CompilationSourceKind::Dir { base, rel_path },
+                    kind: CompilationSourceKind::Dir {
+                        base,
+                        rel_path,
+                        exclude: Vec::new(),
+                    },
                     span: (ident.span(), meta.input.cursor().span()),
                 });
+            } else if ident == "exclude" {
+                // Packages of a `dir` left out, comma-separated and dotted: "test, idlelib.idle_test".
+                let names = check_str()?;
+                let list = names
+                    .value()
+                    .split(',')
+                    .map(|name| name.trim().to_owned())
+                    .filter(|name| !name.is_empty())
+                    .collect();
+                exclude = Some((list, names.span()));
             } else if ident == "crate_name" {
                 let name = check_str()?.parse()?;
                 crate_name = Some(name);
@@ -301,12 +329,18 @@ impl PyCompileArgs {
         })
         .parse2(input)?;
 
-        let source = source.ok_or_else(|| {
+        let mut source = source.ok_or_else(|| {
             syn::Error::new(
                 Span::call_site(),
                 "Must have either file or source in py_compile!()/py_freeze!()",
             )
         })?;
+        if let Some((list, span)) = exclude {
+            match &mut source.kind {
+                CompilationSourceKind::Dir { exclude, .. } => *exclude = list,
+                _ => return Err(syn::Error::new(span, "exclude is only for a dir").into()),
+            }
+        }
 
         Ok(Self {
             source,

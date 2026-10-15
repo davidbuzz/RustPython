@@ -13,4 +13,8 @@ pub const LIB_PATH: &str = match option_env!("win_lib_path") {
 
 #[cfg(feature = "freeze-stdlib")]
 pub const FROZEN_STDLIB: &rustpython_compiler_core::frozen::FrozenLib =
-    rustpython_derive::py_freeze!(dir = "../Lib", crate_name = "rustpython_compiler_core");
+    rustpython_derive::py_freeze!(
+        dir = "../Lib",
+        exclude = "test",
+        crate_name = "rustpython_compiler_core"
+    );
